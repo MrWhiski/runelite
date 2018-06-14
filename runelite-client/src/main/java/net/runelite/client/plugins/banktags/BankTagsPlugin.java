@@ -28,6 +28,8 @@ import com.google.common.eventbus.Subscribe;
 import java.util.Arrays;
 import java.util.List;
 import javax.inject.Inject;
+
+import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.IntegerNode;
@@ -46,6 +48,7 @@ import net.runelite.client.game.ChatboxInputManager;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.bankvalue.BankValueConfig;
 
 @PluginDescriptor(
 	name = "Bank Tags"
@@ -67,6 +70,14 @@ public class BankTagsPlugin extends Plugin
 
 	private static final int EDIT_TAGS_MENU_INDEX = 8;
 
+
+	//private final BankTagsConfig tagsConfig;
+	@Provides
+	BankTagsConfig getConfig(ConfigManager configManager)
+	{
+		return configManager.getConfig(BankTagsConfig.class);
+	}
+
 	@Inject
 	private Client client;
 
@@ -78,6 +89,8 @@ public class BankTagsPlugin extends Plugin
 
 	@Inject
 	private ChatboxInputManager chatboxInputManager;
+
+	@Inject Potions potions;
 
 	private String getTags(int itemId)
 	{
@@ -204,6 +217,9 @@ public class BankTagsPlugin extends Plugin
 			&& event.getId() == EDIT_TAGS_MENU_INDEX
 			&& event.getMenuOption().startsWith(EDIT_TAGS_MENU_OPTION))
 		{
+			//System.out.println(event.getWidgetId());
+
+
 			event.consume();
 			int inventoryIndex = event.getActionParam();
 			ItemContainer bankContainer = client.getItemContainer(InventoryID.BANK);
@@ -234,7 +250,6 @@ public class BankTagsPlugin extends Plugin
 			}
 
 			String itemName = itemComposition.getName();
-
 			String initialValue = getTags(itemId);
 
 			chatboxInputManager.openInputWindow(itemName + " tags:", initialValue, (newTags) ->
@@ -243,7 +258,40 @@ public class BankTagsPlugin extends Plugin
 				{
 					return;
 				}
-				setTags(itemId, newTags);
+
+				// Old code
+				//setTags(itemId, newTags);
+
+
+				/**
+				 * ToDO:
+				 * - Update all affected items
+				 */
+				BankTagsConfig config = getConfig(configManager);
+
+				if(config.allDoses() && Potions.isPotion(itemId))
+				{
+					int[] potionIds = Potions.getPotionIds(itemId);
+
+					if(potionIds != null) {
+						log.debug("Adding Bank Tag for all Potions of a kind");
+						for(int i : potionIds)
+						{
+							setTags(i, newTags);
+						}
+					}
+					else
+					{
+						log.error("Requested ids do not belong to any potions");
+					}
+				}
+				else
+				{
+					log.debug("Adding Standard Bank Tag");
+					setTags(itemId, newTags);
+				}
+
+
 				Widget bankContainerWidget = client.getWidget(WidgetInfo.BANK_ITEM_CONTAINER);
 				if (bankContainerWidget == null)
 				{
